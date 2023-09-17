@@ -1,0 +1,1008 @@
+# install.packages("doParallel")
+# install.packages("elevatr")
+# install.packages("geosphere")
+# install.packages("imager")
+# install.packages("gridExtra")
+# install.packages("devtools")
+# install.packages("dplyr")
+# install.packages("leaflet")
+# install.packages("grImport")
+# install.packages("ggplot2")
+# install.packages("httr")
+# install.packages("jsonlite")
+# install.packages("textreadr")
+# install.packages("rgdal")
+# install.packages("geotech")
+# install.packages("soiltexture")
+
+library(doParallel)
+library(MASS)
+library(elevatr)
+library(geosphere)
+library(imager)
+library(gridExtra)
+library(grid)
+library(devtools)
+library(dplyr)
+library(leaflet)
+library(grImport)
+library(ggplot2)
+library(httr)
+library(jsonlite)
+library(textreadr)
+library(rgdal)
+library(geotech)
+library(soiltexture)
+
+t <- 10
+i <- 5
+prj_dd <- "+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs"
+numCores <- detectCores()
+registerDoParallel(numCores)
+
+lat1 <- 34.50254 #length, y
+long1 <- -119.80725 #width, x
+
+lat2<- 34.42258 #length, y
+long2<- -119.62143 #width, x
+
+set.seed(i)
+data_df <- data.frame(x = runif(t, min = long1, max = long2), y = runif(t, min = lat2, max = lat1), z = runif(t, min = long1, max = long2), a = runif(t, min = lat2, max = lat1))
+
+elevation1 <- foreach (i=1:t, .packages = "textreadr", .combine = 'rbind') %dopar% 
+{
+
+    x <- data_df$x[i]
+    y <- data_df$y[i] 
+        
+    str1 <- "https://nationalmap.gov/epqs/pqs.php?x="
+    str2 <- x
+    str3 <- "&y="
+    str4 <- y
+    str5 <- "&units=Feet&output=xml"
+        
+    url <- paste(str1,str2,str3,str4,str5,sep = "")
+    webpage <- read_html(url)
+        
+    test1 <- as.data.frame(webpage)
+    test2 <- as.data.frame(t(test1))
+    test2$V1 <- test2$V2
+    h = as.data.frame(test2$V1)
+}
+
+elevation1 <- data.frame(elevation1)
+elevation1$elevation <- NULL
+elevation1$x <- NULL
+elevation1$y <- NULL
+
+elevation1$elevation <- elevation1$test2.V1
+elevation1$x <- data_df$x
+elevation1$y <- data_df$y
+elevation1$elevation <- as.numeric(as.character(elevation1[,1]))
+elevation1$test2.V1 <- NULL
+
+
+data_dfs <- data_df
+data_dfs$x <- NULL
+data_dfs$y <- NULL
+
+elevation2 <- foreach (i=1:t, .packages = "textreadr", .combine = 'rbind') %dopar% 
+{
+    
+    x <- data_dfs$z[i]
+    y <- data_dfs$a[i] 
+        
+    str1 <- "https://nationalmap.gov/epqs/pqs.php?x="
+    str2 <- x
+    str3 <- "&y="
+    str4 <- y
+    str5 <- "&units=Feet&output=xml"
+        
+    url <- paste(str1,str2,str3,str4,str5,sep = "")
+    webpage <- read_html(url)
+        
+    test1 <- as.data.frame(webpage)
+    test2 <- as.data.frame(t(test1))
+    test2$V1 <- test2$V2
+
+    h = as.data.frame(test2$V1)
+}
+
+elevation2 <- data.frame(elevation2)
+elevation2$elevation <- NULL
+elevation1$z <- NULL
+elevation1$a <- NULL
+
+elevation2$elevation <- elevation2$test2.V1
+elevation2$z <- data_df$z
+elevation2$a <- data_df$a
+elevation2$elevation <- as.numeric(as.character(elevation2[,1]))
+elevation2$test2.V1 <- NULL
+
+length1 <- data_df %>% mutate(CTD = geosphere::distHaversine(cbind(x, y), cbind(z, a)))
+
+length1$x <- NULL
+length1$y <- NULL
+length1$z <- NULL
+length1$a <- NULL
+
+elevation1$z <- NULL
+elevation1$a <- NULL
+
+length1 <- length1 %>%
+    mutate(CTD=replace(CTD, CTD<50, NA)) %>%
+    as.data.frame()
+
+heightdif <- abs(elevation1$elevation - elevation2$elevation)
+heightdif <- as.data.frame(heightdif)
+
+angle <- (57.295779513*(atan((heightdif$heightdif/length1$CTD))))
+angle <- as.data.frame(angle)
+
+angle$lat1 <- 0
+angle$long1 <- 0
+angle$lat2 <- 0
+angle$long2 <- 0
+
+angle$lat1 <- elevation1$y
+angle$lat2 <- elevation2$a
+angle$long1 <- elevation1$x
+angle$long2 <- elevation2$z
+
+angle$elevation1 <- 0
+angle$elevation2 <- 0
+
+angle$elevation1 <- elevation1$elevation
+angle$elevation2 <- elevation2$elevation
+
+angle$heightdif <- 0
+
+angle$heightdif <- heightdif$heightdif
+
+angle$distance <- 0
+
+angle$distance <- length1$CTD
+
+set1 <- data_df
+set1$z <- NULL
+set1$a <- NULL
+
+set2 <- data_dfs
+
+z <- -3
+
+set1sand <- foreach (i=1:t, .packages = "textreadr", .combine = 'rbind') %dopar% 
+{
+    
+    repeat {
+        x <- set1$y[i]
+        y <- set1$x[i] 
+        
+        str1 <- "https://casoilresource.lawr.ucdavis.edu/soil-properties/query_grid.php?lat="
+        str2 <- x
+        str3 <- "&lon="
+        str4 <- y
+        str5 <- "&property="
+        str6 <- "sand"
+        
+        url <- paste(str1,str2,str3,str4,str5,str6,sep = "")
+        webpage <- read_html(url)
+        
+        test1 <- as.data.frame(webpage)
+        test2 <- as.data.frame(t(test1))
+        test2$V1 <- -5
+        test2$V1 <- test2$V3
+        z <- as.numeric(test2$V1)
+        a <- as.character(test2$V2)
+        if (a == "SELECT sand, survey_type\nFROM conus_800m_grid.grid \nJOIN conus_800m_grid.merged_data\nUSING (gid)\nWHERE ST_Intersects(geom, ST_Transform(ST_SetSRID(ST_MakePoint($1, $2), 4326), 9002));\nError with query.") {
+            z <- "-5"
+            
+        }
+        
+        if (z > 0 ) {
+            break
+        }
+        
+        
+    }
+    z <- -3
+    h = as.data.frame(test2$V1)
+}
+
+set2sand <- foreach (i=1:t, .packages = "textreadr", .combine = 'rbind') %dopar% 
+{
+    
+    repeat {
+        x <- set2$a[i]
+        y <- set2$z[i] 
+        
+        str1 <- "https://casoilresource.lawr.ucdavis.edu/soil-properties/query_grid.php?lat="
+        str2 <- x
+        str3 <- "&lon="
+        str4 <- y
+        str5 <- "&property="
+        str6 <- "sand"
+        
+        url <- paste(str1,str2,str3,str4,str5,str6,sep = "")
+        webpage <- read_html(url)
+        
+        test1 <- as.data.frame(webpage)
+        test2 <- as.data.frame(t(test1))
+        test2$V1 <- -5
+        test2$V1 <- test2$V3
+        z <- as.numeric(test2$V1)
+        a <- as.character(test2$V2)
+        if (a == "SELECT sand, survey_type\nFROM conus_800m_grid.grid \nJOIN conus_800m_grid.merged_data\nUSING (gid)\nWHERE ST_Intersects(geom, ST_Transform(ST_SetSRID(ST_MakePoint($1, $2), 4326), 9002));\nError with query.") {
+            z <- "-5"
+            
+        }
+        
+        if (z > 0 ) {
+            break
+        }
+        
+    }
+    z <- -3
+    p <- as.data.frame(test2$V1)
+}
+
+
+set1silt <- foreach (i=1:t, .packages = "textreadr", .combine = 'rbind') %dopar%
+{
+    
+    repeat {
+        x <- set1$y[i]
+        y <- set1$x[i] 
+        
+        str1 <- "https://casoilresource.lawr.ucdavis.edu/soil-properties/query_grid.php?lat="
+        str2 <- x
+        str3 <- "&lon="
+        str4 <- y
+        str5 <- "&property="
+        str6 <- "silt"
+        
+        url <- paste(str1,str2,str3,str4,str5,str6,sep = "")
+        webpage <- read_html(url)
+        
+        test1 <- as.data.frame(webpage)
+        test2 <- as.data.frame(t(test1))
+        test2$V1 <- -5
+        test2$V1 <- test2$V3
+        z <- as.numeric(test2$V1)
+        a <- as.character(test2$V2)
+        if (a == "SELECT silt, survey_type\nFROM conus_800m_grid.grid \nJOIN conus_800m_grid.merged_data\nUSING (gid)\nWHERE ST_Intersects(geom, ST_Transform(ST_SetSRID(ST_MakePoint($1, $2), 4326), 9002));\nError with query.") {
+            z <- "-5"
+            
+        }
+        
+        if (z > 0 ) {
+            break
+        }
+        
+    }
+    z <- -3
+    f <- as.data.frame(test2$V1)
+}
+
+set2silt <- foreach (i=1:t, .packages = "textreadr", .combine = 'rbind') %dopar% 
+{
+    
+    repeat {
+        x <- set2$a[i]
+        y <- set2$z[i] 
+        
+        str1 <- "https://casoilresource.lawr.ucdavis.edu/soil-properties/query_grid.php?lat="
+        str2 <- x
+        str3 <- "&lon="
+        str4 <- y
+        str5 <- "&property="
+        str6 <- "silt"
+        
+        url <- paste(str1,str2,str3,str4,str5,str6,sep = "")
+        webpage <- read_html(url)
+        
+        test1 <- as.data.frame(webpage)
+        test2 <- as.data.frame(t(test1))
+        test2$V1 <- -5
+        test2$V1 <- test2$V3
+        z <- as.numeric(test2$V1)
+        a <- as.character(test2$V2)
+        if (a == "SELECT silt, survey_type\nFROM conus_800m_grid.grid \nJOIN conus_800m_grid.merged_data\nUSING (gid)\nWHERE ST_Intersects(geom, ST_Transform(ST_SetSRID(ST_MakePoint($1, $2), 4326), 9002));\nError with query.") {
+            z <- "-5"
+            
+        }
+        
+        if (z > 0 ) {
+            break
+        }
+        
+    }
+    z <- -3
+    g <- as.data.frame(test2$V1)
+}
+
+set1bd <- foreach (i=1:t, .packages = "textreadr", .combine = 'rbind') %dopar%
+{
+    
+    repeat {
+        x <- set1$y[i]
+        y <- set1$x[i] 
+        
+        str1 <- "https://casoilresource.lawr.ucdavis.edu/soil-properties/query_grid.php?lat="
+        str2 <- x
+        str3 <- "&lon="
+        str4 <- y
+        str5 <- "&property="
+        str6 <- "db"
+        
+        url <- paste(str1,str2,str3,str4,str5,str6,sep = "")
+        webpage <- read_html(url)
+        
+        test1 <- as.data.frame(webpage)
+        test2 <- as.data.frame(t(test1))
+        test2$V1 <- -5
+        test2$V1 <- test2$V3
+        z <- as.numeric(test2$V1)
+        a <- as.character(test2$V2)
+        if (a == "SELECT db, survey_type\nFROM conus_800m_grid.grid \nJOIN conus_800m_grid.merged_data\nUSING (gid)\nWHERE ST_Intersects(geom, ST_Transform(ST_SetSRID(ST_MakePoint($1, $2), 4326), 9002));\nError with query.") {
+            z <- "-5"
+            
+        }
+        
+        if (z > 0 ) {
+            break
+        }
+        
+    }
+    z <- -3
+    f <- as.data.frame(test2$V1)
+}
+
+set2bd <- foreach (i=1:t, .packages = "textreadr", .combine = 'rbind') %dopar% 
+{
+    
+    repeat {
+        x <- set2$a[i]
+        y <- set2$z[i] 
+        
+        str1 <- "https://casoilresource.lawr.ucdavis.edu/soil-properties/query_grid.php?lat="
+        str2 <- x
+        str3 <- "&lon="
+        str4 <- y
+        str5 <- "&property="
+        str6 <- "db"
+        
+        url <- paste(str1,str2,str3,str4,str5,str6,sep = "")
+        webpage <- read_html(url)
+        
+        test1 <- as.data.frame(webpage)
+        test2 <- as.data.frame(t(test1))
+        test2$V1 <- -5
+        test2$V1 <- test2$V3
+        z <- as.numeric(test2$V1)
+        a <- as.character(test2$V2)
+        if (a == "SELECT db, survey_type\nFROM conus_800m_grid.grid \nJOIN conus_800m_grid.merged_data\nUSING (gid)\nWHERE ST_Intersects(geom, ST_Transform(ST_SetSRID(ST_MakePoint($1, $2), 4326), 9002));\nError with query.") {
+            z <- "-5"
+            
+        }
+        
+        if (z > 0 ) {
+            break
+        }
+        
+    }
+    z <- -3
+    g <- as.data.frame(test2$V1)
+}
+
+set1soil_depth <- foreach (i=1:t, .packages = "textreadr", .combine = 'rbind') %dopar%
+{
+    
+    repeat {
+        x <- set1$y[i]
+        y <- set1$x[i] 
+        
+        str1 <- "https://casoilresource.lawr.ucdavis.edu/soil-properties/query_grid.php?lat="
+        str2 <- x
+        str3 <- "&lon="
+        str4 <- y
+        str5 <- "&property="
+        str6 <- "soil_depth"
+        
+        url <- paste(str1,str2,str3,str4,str5,str6,sep = "")
+        webpage <- read_html(url)
+        
+        test1 <- as.data.frame(webpage)
+        test2 <- as.data.frame(t(test1))
+        test2$V1 <- -5
+        test2$V1 <- test2$V3
+        z <- as.numeric(test2$V1)
+        a <- as.character(test2$V2)
+        if (a == "SELECT soil_depth, survey_type\nFROM conus_800m_grid.grid \nJOIN conus_800m_grid.merged_data\nUSING (gid)\nWHERE ST_Intersects(geom, ST_Transform(ST_SetSRID(ST_MakePoint($1, $2), 4326), 9002));\nError with query.") {
+            z <- "-5"
+            
+        }
+        
+        if (z > 0 ) {
+            break
+        }
+        
+    }
+    z <- -3
+    f <- as.data.frame(test2$V1)
+}
+
+set2soil_depth <- foreach (i=1:t, .packages = "textreadr", .combine = 'rbind') %dopar% 
+{
+    
+    repeat {
+        x <- set2$a[i]
+        y <- set2$z[i] 
+        
+        str1 <- "https://casoilresource.lawr.ucdavis.edu/soil-properties/query_grid.php?lat="
+        str2 <- x
+        str3 <- "&lon="
+        str4 <- y
+        str5 <- "&property="
+        str6 <- "soil_depth"
+        
+        url <- paste(str1,str2,str3,str4,str5,str6,sep = "")
+        webpage <- read_html(url)
+        
+        test1 <- as.data.frame(webpage)
+        test2 <- as.data.frame(t(test1))
+        test2$V1 <- -5
+        test2$V1 <- test2$V3
+        z <- as.numeric(test2$V1)
+        a <- as.character(test2$V2)
+        if (a == "SELECT soil_depth, survey_type\nFROM conus_800m_grid.grid \nJOIN conus_800m_grid.merged_data\nUSING (gid)\nWHERE ST_Intersects(geom, ST_Transform(ST_SetSRID(ST_MakePoint($1, $2), 4326), 9002));\nError with query.") {
+            z <- "-5"
+            
+        }
+        
+        if (z > 0 ) {
+            break
+        }
+        
+    }
+    z <- -3
+    g <- as.data.frame(test2$V1)
+}
+
+set1water_storage <- foreach (i=1:t, .packages = "textreadr", .combine = 'rbind') %dopar%
+{
+    
+    repeat {
+        x <- set1$y[i]
+        y <- set1$x[i] 
+        
+        str1 <- "https://casoilresource.lawr.ucdavis.edu/soil-properties/query_grid.php?lat="
+        str2 <- x
+        str3 <- "&lon="
+        str4 <- y
+        str5 <- "&property="
+        str6 <- "water_storage"
+        
+        url <- paste(str1,str2,str3,str4,str5,str6,sep = "")
+        webpage <- read_html(url)
+        
+        test1 <- as.data.frame(webpage)
+        test2 <- as.data.frame(t(test1))
+        test2$V1 <- -5
+        test2$V1 <- test2$V3
+        z <- as.numeric(test2$V1)
+        a <- as.character(test2$V2)
+        if (a == "SELECT water_storage, survey_type\nFROM conus_800m_grid.grid \nJOIN conus_800m_grid.merged_data\nUSING (gid)\nWHERE ST_Intersects(geom, ST_Transform(ST_SetSRID(ST_MakePoint($1, $2), 4326), 9002));\nError with query.") {
+            z <- "-5"
+            
+        }
+        
+        if (z > 0 ) {
+            break
+        }
+        
+    }
+    z <- -3
+    f <- as.data.frame(test2$V1)
+}
+
+set2water_storage <- foreach (i=1:t, .packages = "textreadr", .combine = 'rbind') %dopar% 
+{
+    
+    repeat {
+        x <- set2$a[i]
+        y <- set2$z[i] 
+        
+        str1 <- "https://casoilresource.lawr.ucdavis.edu/soil-properties/query_grid.php?lat="
+        str2 <- x
+        str3 <- "&lon="
+        str4 <- y
+        str5 <- "&property="
+        str6 <- "water_storage"
+        
+        url <- paste(str1,str2,str3,str4,str5,str6,sep = "")
+        webpage <- read_html(url)
+        
+        test1 <- as.data.frame(webpage)
+        test2 <- as.data.frame(t(test1))
+        test2$V1 <- -5
+        test2$V1 <- test2$V3
+        z <- as.numeric(test2$V1)
+        a <- as.character(test2$V2)
+        if (a == "SELECT water_storage, survey_type\nFROM conus_800m_grid.grid \nJOIN conus_800m_grid.merged_data\nUSING (gid)\nWHERE ST_Intersects(geom, ST_Transform(ST_SetSRID(ST_MakePoint($1, $2), 4326), 9002));\nError with query.") {
+            z <- "-5"
+            
+        }
+        
+        if (z > 0 ) {
+            break
+        }
+        
+    }
+    z <- -3
+    g <- as.data.frame(test2$V1)
+}
+
+finalish <- NULL
+finalish$lat1 <- set1$y
+finalish$long1 <- set1$x
+finalish$sand1 <- set1sand[["test2$V1"]]
+finalish$silt1 <- set1silt[["test2$V1"]]
+finalish$clay1 <- (100-(as.numeric(as.character(finalish$sand1))+as.numeric(as.character(finalish$silt1))))
+finalish$lat2 <- set2$a
+finalish$long2 <- set2$z
+finalish$sand2 <- set2sand[["test2$V1"]]
+finalish$silt2 <- set2silt[["test2$V1"]]
+finalish$clay2 <- (100-(as.numeric(as.character(finalish$sand2))+as.numeric(as.character(finalish$silt2))))
+finalish$angle <- angle$angle
+finalish <- as.data.frame(finalish)
+
+test1 <- NULL
+test1$CLAY <- as.numeric(as.character(finalish$clay1))
+test1$SILT <- as.numeric(as.character(finalish$silt1))
+test1$SAND <- as.numeric(as.character(finalish$sand1))
+test1<- as.data.frame(test1)
+
+yeet <- TT.points.in.classes(
+    tri.data = test1,
+    class.sys = "USDA.TT",
+    PiC.type = "t"
+)
+
+yeet <- as.data.frame(yeet)
+
+test2 <- NULL
+test2$CLAY <- as.numeric(as.character(finalish$clay2))
+test2$SILT <- as.numeric(as.character(finalish$silt2))
+test2$SAND <- as.numeric(as.character(finalish$sand2))
+test2<- as.data.frame(test2)
+
+yeetus <- TT.points.in.classes(
+    tri.data = test2,
+    class.sys = "USDA.TT",
+    PiC.type = "t"
+)
+
+yeetus <- as.data.frame(yeet)
+
+final <- NULL
+final$lat1 <- set1$y # Latitude
+final$long1 <- set1$x # Longitude
+final$soil1 <- yeet$yeet # Soil Type
+final$bd1 <- set1bd[["test2$V1"]] # Bulk Density  In g/cm^3
+final$soil_depth1 <- set1soil_depth[["test2$V1"]] # Soil Depth  In cm
+final$water_storage1 <- set1water_storage[["test2$V1"]] # Water Storage  In cm
+final$water_percentage1 <- ((as.numeric(as.character(final$water_storage1)))/(as.numeric(as.character(final$soil_depth1))))
+final$water_depth1 <- 200 # In cm
+final$blank1 <- 0 # Blank
+
+final$lat2 <- set2$a # Latitude
+final$long2 <- set2$z # Longitude
+final$soil2 <- yeetus$yeet # Soil Type
+final$bd2 <- set2bd[["test2$V1"]] # Bulk Density  In g/cm^3
+final$soil_depth2 <- set2soil_depth[["test2$V1"]] # Soil Depth  In cm
+final$water_storage2 <- set2water_storage[["test2$V1"]] # Water Storage  In cm
+final$water_percentage2 <- ((as.numeric(as.character(final$water_storage2)))/(as.numeric(as.character(final$soil_depth2))))
+final$water_depth2 <- 200 # In cm
+final$blank2 <- 0 # Blank
+
+final$angle <- angle$angle # Angle  In Degrees
+final <- as.data.frame(final)
+
+
+
+x1 <- as.data.frame(final$soil1)
+x1$x1 <- x1[["final$soil1"]]
+x1[["final$soil1"]] <- NULL
+
+d1 <- as.data.frame(as.numeric(as.character(final$bd1))*1000) #Density (kg/m^3)
+d1$d1 <- d1[["as.numeric(as.character(final$bd1)) * 1000"]]
+d1[["as.numeric(as.character(final$bd1)) * 1000"]] <- NULL
+
+f1 <- as.data.frame(as.numeric(as.character(final$soil_depth1))/100) #Thickness of soil material (m)
+f1$f1 <- f1[["as.numeric(as.character(final$soil_depth1))/100"]]
+f1[["as.numeric(as.character(final$soil_depth1))/100"]] <- NULL
+
+h1 <- as.data.frame(as.numeric(as.character(final$water_depth1))/100) #Depth of Water Table (m)
+h1$h1 <- h1[["as.numeric(as.character(final$water_depth1))/100"]]
+h1[["as.numeric(as.character(final$water_depth1))/100"]] <- NULL
+
+q1 <- as.data.frame(final$water_percentage1) #Water Content (m^3/m^3)
+q1$q1 <- q1[["final$water_percentage1"]]
+q1[["final$water_percentage1"]] <- NULL
+
+
+e1 <- as.data.frame(final$blank1) #Cohesion of slope material in (kPa)
+e1$e1 <- e1[["final$blank1"]]
+e1[["final$blank1"]] <- NULL
+
+j1 <- as.data.frame(final$blank1) #Radius of Soil (m)
+j1$j1 <- j1[["final$blank1"]]
+j1[["final$blank1"]] <- NULL
+
+k1 <- as.data.frame(final$blank1) #Water Retention Angle
+k1$k1 <- k1[["final$blank1"]]
+k1[["final$blank1"]] <- NULL
+
+o1 <- as.data.frame(final$blank1) #Saturated Water Content (m^3/m^3)
+o1$o1 <- o1[["final$blank1"]]
+o1[["final$blank1"]] <- NULL
+
+p1 <- as.data.frame(final$blank1) #Residual Water Content (m^3/m^3)
+p1$p1 <- p1[["final$blank1"]]
+p1[["final$blank1"]] <- NULL
+
+r1 <- as.data.frame(final$blank1) #Angle of Internal Friction
+r1$r1 <- r1[["final$blank1"]]
+r1[["final$blank1"]] <- NULL
+
+x1$e1 <- 0
+x1$j1 <- 0
+x1$k1 <- 0
+x1$o1 <- 0
+x1$p1 <- 0
+x1$r1 <- 0
+
+
+x1 <- within(x1, e1[x1 == "Sa"]<- 9) #Cohesion of slope material in (kPa)
+x1 <- within(x1, j1[x1 == "Sa"]<- (0.425/1000)) #Radius of Soil (m)
+x1 <- within(x1, k1[x1 == "Sa"]<- 0.1) #Water Retention Angle
+x1 <- within(x1, o1[x1 == "Sa"]<- 0.37) #Saturated Water Content (m^3/m^3)
+x1 <- within(x1, p1[x1 == "Sa"]<- 0.058) #Residual Water Content (m^3/m^3)
+x1 <- within(x1, r1[x1 == "Sa"]<- 31) #Angle of Internal Friction
+
+x1 <- within(x1, e1[x1 == "SaCl"]<- 0) #Cohesion of slope material in (kPa)
+x1 <- within(x1, j1[x1 == "SaCl"]<- (0.031/1000)) #Radius of Soil (m)
+x1 <- within(x1, k1[x1 == "SaCl"]<- 0.1) #Water Retention Angle
+x1 <- within(x1, o1[x1 == "SaCl"]<- 0.52) #Saturated Water Content (m^3/m^3)
+x1 <- within(x1, p1[x1 == "SaCl"]<- 0.1) #Residual Water Content (m^3/m^3)
+x1 <- within(x1, r1[x1 == "SaCl"]<- 32) #Angle of Internal Friction
+
+x1 <- within(x1, e1[x1 == "LoSa"]<- 8) #Cohesion of slope material in (kPa)
+x1 <- within(x1, j1[x1 == "LoSa"]<- (0.074/1000)) #Radius of Soil (m)
+x1 <- within(x1, k1[x1 == "LoSa"]<- 0.1) #Water Retention Angle
+x1 <- within(x1, o1[x1 == "LoSa"]<- 0.39) #Saturated Water Content (m^3/m^3)
+x1 <- within(x1, p1[x1 == "LoSa"]<- 0.074) #Residual Water Content (m^3/m^3)
+x1 <- within(x1, r1[x1 == "LoSa"]<- 32) #Angle of Internal Friction
+
+x1 <- within(x1, e1[x1 == "SaLo"]<- 7) #Cohesion of slope material in (kPa)
+x1 <- within(x1, j1[x1 == "SaLo"]<- (0.05/1000)) #Radius of Soil (m)
+x1 <- within(x1, k1[x1 == "SaLo"]<- 0.1) #Water Retention Angle
+x1 <- within(x1, o1[x1 == "SaLo"]<- 0.37) #Saturated Water Content (m^3/m^3)
+x1 <- within(x1, p1[x1 == "SaLo"]<- 0.067) #Residual Water Content (m^3/m^3)
+x1 <- within(x1, r1[x1 == "SaLo"]<- 32) #Angle of Internal Friction
+
+x1 <- within(x1, e1[x1 == "Lo"]<- 20) #Cohesion of slope material in (kPa)
+x1 <- within(x1, j1[x1 == "Lo"]<- (0.031/1000)) #Radius of Soil (m)
+x1 <- within(x1, k1[x1 == "Lo"]<- 0.1) #Water Retention Angle
+x1 <- within(x1, o1[x1 == "Lo"]<- 0.46) #Saturated Water Content (m^3/m^3)
+x1 <- within(x1, p1[x1 == "Lo"]<- 0.083) #Residual Water Content (m^3/m^3)
+x1 <- within(x1, r1[x1 == "Lo"]<- 27) #Angle of Internal Friction
+
+x1 <- within(x1, e1[x1 == "Si"]<- 0) #Cohesion of slope material in (kPa)
+x1 <- within(x1, j1[x1 == "Si"]<- (0.005/1000)) #Radius of Soil (m)
+x1 <- within(x1, k1[x1 == "Si"]<- 2) #Water Retention Angle
+x1 <- within(x1, o1[x1 == "Si"]<- 0.48) #Saturated Water Content (m^3/m^3)
+x1 <- within(x1, p1[x1 == "Si"]<- 0.123) #Residual Water Content (m^3/m^3)
+x1 <- within(x1, r1[x1 == "Si"]<- 33) #Angle of Internal Friction
+
+x1 <- within(x1, e1[x1 == "SiLo"]<- 20) #Cohesion of slope material in (kPa)
+x1 <- within(x1, j1[x1 == "SiLo"]<- (0.0156/1000)) #Radius of Soil (m)
+x1 <- within(x1, k1[x1 == "SiLo"]<- 1.5) #Water Retention Angle
+x1 <- within(x1, o1[x1 == "SiLo"]<- 0.43) #Saturated Water Content (m^3/m^3)
+x1 <- within(x1, p1[x1 == "SiLo"]<- 0.061) #Residual Water Content (m^3/m^3)
+x1 <- within(x1, r1[x1 == "SiLo"]<- 27) #Angle of Internal Friction
+
+x1 <- within(x1, e1[x1 == "SaClLo"]<- 13) #Cohesion of slope material in (kPa)
+x1 <- within(x1, j1[x1 == "SaClLo"]<- (0.031/1000)) #Radius of Soil (m)
+x1 <- within(x1, k1[x1 == "SaClLo"]<- 4) #Water Retention Angle
+x1 <- within(x1, o1[x1 == "SaClLo"]<- 0.40) #Saturated Water Content (m^3/m^3)
+x1 <- within(x1, p1[x1 == "SaClLo"]<- 0.086) #Residual Water Content (m^3/m^3)
+x1 <- within(x1, r1[x1 == "SaClLo"]<- 29) #Angle of Internal Friction    
+
+x1 <- within(x1, e1[x1 == "ClLo"]<- 20) #Cohesion of slope material in (kPa)
+x1 <- within(x1, j1[x1 == "ClLo"]<- (0.002/1000)) #Radius of Soil (m)
+x1 <- within(x1, k1[x1 == "ClLo"]<- 9) #Water Retention Angle
+x1 <- within(x1, o1[x1 == "ClLo"]<- 0.47) #Saturated Water Content (m^3/m^3)
+x1 <- within(x1, p1[x1 == "ClLo"]<- 0.129) #Residual Water Content (m^3/m^3)
+x1 <- within(x1, r1[x1 == "ClLo"]<- 27) #Angle of Internal Friction    
+
+x1 <- within(x1, e1[x1 == "SiClLo"]<- 20) #Cohesion of slope material in (kPa)
+x1 <- within(x1, j1[x1 == "SiClLo"]<- (0.0039/1000)) #Radius of Soil (m)
+x1 <- within(x1, k1[x1 == "SiClLo"]<- 78) #Water Retention Angle
+x1 <- within(x1, o1[x1 == "SiClLo"]<- 0.55) #Saturated Water Content (m^3/m^3)
+x1 <- within(x1, p1[x1 == "SiClLo"]<- 0.098) #Residual Water Content (m^3/m^3)
+x1 <- within(x1, r1[x1 == "SiClLo"]<- 27) #Angle of Internal Friction        
+
+x1 <- within(x1, e1[x1 == "SiCl"]<- 22) #Cohesion of slope material in (kPa)
+x1 <- within(x1, j1[x1 == "SiCl"]<- (0.005/1000)) #Radius of Soil (m)
+x1 <- within(x1, k1[x1 == "SiCl"]<- 60) #Water Retention Angle
+x1 <- within(x1, o1[x1 == "SiCl"]<- 0.47) #Saturated Water Content (m^3/m^3)
+x1 <- within(x1, p1[x1 == "SiCl"]<- 0.163) #Residual Water Content (m^3/m^3)
+x1 <- within(x1, r1[x1 == "SiCl"]<- 27) #Angle of Internal Friction
+
+x1 <- within(x1, e1[x1 == "Cl"]<- 23) #Cohesion of slope material in (kPa)
+x1 <- within(x1, j1[x1 == "Cl"]<- (0.001/1000)) #Radius of Soil (m)
+x1 <- within(x1, k1[x1 == "Cl"]<- 78) #Water Retention Angle
+x1 <- within(x1, o1[x1 == "Cl"]<- 0.51) #Saturated Water Content (m^3/m^3)
+x1 <- within(x1, p1[x1 == "Cl"]<- 0.102) #Residual Water Content (m^3/m^3)
+x1 <- within(x1, r1[x1 == "Cl"]<- 26) #Angle of Internal Friction
+
+
+e1$e1 <- x1$e1
+j1$j1 <- x1$j1
+k1$k1 <- x1$k1
+o1$o1 <- x1$o1
+p1$p1 <- x1$p1
+r1$r1 <- x1$r1
+
+
+k1 <- as.data.frame(k1*(pi/180))
+r1 <- as.data.frame(r1*(pi/180))
+
+c1 <- as.data.frame(as.numeric(as.character(final$angle))*(pi/180)) #Angle
+c1$c1 <- c1[["as.numeric(as.character(final$angle)) * (pi/180)"]]
+c1[["as.numeric(as.character(final$angle)) * (pi/180)"]] <- NULL
+
+g1 <- as.data.frame((f1$f1*d1$d1*9.81*cos(c1$c1))) #Normal Force (kPa)
+g1$g1 <- g1[["(f1$f1 * d1$d1 * 9.81 * cos(c1$c1))"]]
+g1[["(f1$f1 * d1$d1 * 9.81 * cos(c1$c1))"]] <- NULL
+
+a1 <- as.data.frame(-9.81*h1$h1) #Pore-Pressure of Water (kPa)
+a1$a1 <- a1[["-9.81 * h1$h1"]]
+a1[["-9.81 * h1$h1"]] <- NULL
+
+l1 <- as.data.frame((180/pi)*(j1$j1*((1/(cos(k1$k1)))-1))) #r1
+l1$l1 <- l1[["(180/pi) * (j1$j1 * ((1/(cos(k1$k1))) - 1))"]]
+l1[["(180/pi) * (j1$j1 * ((1/(cos(k1$k1))) - 1))"]] <- NULL
+
+m1 <- as.data.frame((180/pi)*(j1$j1*(1+((tan(k1$k1))-(1/(cos(k1$k1))))))) #r2
+m1$m1 <- m1[["(180/pi) * (j1$j1 * (1 + ((tan(k1$k1)) - (1/(cos(k1$k1))))))"]]
+m1[["(180/pi) * (j1$j1 * (1 + ((tan(k1$k1)) - (1/(cos(k1$k1))))))"]] <- NULL
+
+n1 <- as.data.frame(((72*((1/l1$l1)-(1/m1$m1)))/1000000)+a1$a1) #Pore-Pressure of Air (kPa)
+n1$n1 <- n1[["((72 * ((1/l1$l1) - (1/m1$m1)))/1e+06) + a1$a1"]]
+n1[["((72 * ((1/l1$l1) - (1/m1$m1)))/1e+06) + a1$a1"]] <- NULL
+
+s1 <- as.data.frame(e1$e1+((g1$g1-a1$a1)*(tan(r1$r1*q1$q1))+((n1$n1-a1$a1)*((q1$q1-p1$p1)/(o1$o1-p1$p1))*(tan(r1$r1*q1$q1))))) #Shear Strength, Resisting Force (kPa)
+s1$s1 <- s1[["e1$e1 + ((g1$g1 - a1$a1) * (tan(r1$r1 * q1$q1)) + ((n1$n1 - a1$a1) * ((q1$q1 - p1$p1)/(o1$o1 - p1$p1)) * (tan(r1$r1 * q1$q1))))"]]
+s1[["e1$e1 + ((g1$g1 - a1$a1) * (tan(r1$r1 * q1$q1)) + ((n1$n1 - a1$a1) * ((q1$q1 - p1$p1)/(o1$o1 - p1$p1)) * (tan(r1$r1 * q1$q1))))"]] <- NULL
+
+b1 <- as.data.frame((f1$f1*d1$d1*9.81*sin(c1$c1))) #Driving Force (kPa)
+b1$b1 <- b1[["(f1$f1 * d1$d1 * 9.81 * sin(c1$c1))"]]
+b1[["(f1$f1 * d1$d1 * 9.81 * sin(c1$c1))"]] <- NULL
+
+u1 <- as.data.frame(s1$s1/b1$b1) #FOC
+u1$u1 <- u1[["s1$s1/b1$b1"]]
+u1[["s1$s1/b1$b1"]] <- NULL
+
+
+
+x2 <- as.data.frame(final$soil2)
+x2$x2 <- x2[["final$soil2"]]
+x2[["final$soil2"]] <- NULL
+
+d2 <- as.data.frame(as.numeric(as.character(final$bd2))*1000) #Density (kg/m^3)
+d2$d2 <- d2[["as.numeric(as.character(final$bd2)) * 1000"]]
+d2[["as.numeric(as.character(final$bd2)) * 1000"]] <- NULL
+
+f2 <- as.data.frame(as.numeric(as.character(final$soil_depth2))/100) #Thickness of soil material (m)
+f2$f2 <- f2[["as.numeric(as.character(final$soil_depth2))/100"]]
+f2[["as.numeric(as.character(final$soil_depth2))/100"]] <- NULL
+
+h2 <- as.data.frame(as.numeric(as.character(final$water_depth2))/100) #Depth of Water Table (m)
+h2$h2 <- h2[["as.numeric(as.character(final$water_depth2))/100"]]
+h2[["as.numeric(as.character(final$water_depth2))/100"]] <- NULL
+
+q2 <- as.data.frame(final$water_percentage2) #Water Content (m^3/m^3)
+q2$q2 <- q2[["final$water_percentage2"]]
+q2[["final$water_percentage2"]] <- NULL
+
+
+e2 <- as.data.frame(final$blank2) #Cohesion of slope material in (kPa)
+e2$e2 <- e2[["final$blank2"]]
+e2[["final$blank2"]] <- NULL
+
+j2 <- as.data.frame(final$blank2) #Radius of Soil (m)
+j2$j2 <- j2[["final$blank2"]]
+j2[["final$blank2"]] <- NULL
+
+k2 <- as.data.frame(final$blank2) #Water Retention Angle
+k2$k2 <- k2[["final$blank2"]]
+k2[["final$blank2"]] <- NULL
+
+o2 <- as.data.frame(final$blank2) #Saturated Water Content (m^3/m^3)
+o2$o2 <- o2[["final$blank2"]]
+o2[["final$blank2"]] <- NULL
+
+p2 <- as.data.frame(final$blank2) #Residual Water Content (m^3/m^3)
+p2$p2 <- p2[["final$blank2"]]
+p2[["final$blank2"]] <- NULL
+
+r2 <- as.data.frame(final$blank2) #Angle of Internal Friction
+r2$r2 <- r2[["final$blank2"]]
+r2[["final$blank2"]] <- NULL
+
+x2$e2 <- 0
+x2$j2 <- 0
+x2$k2 <- 0
+x2$o2 <- 0
+x2$p2 <- 0
+x2$r2 <- 0
+
+
+x2 <- within(x2, e2[x2 == "Sa"]<- 9) #Cohesion of slope material in (kPa)
+x2 <- within(x2, j2[x2 == "Sa"]<- (0.425/1000)) #Radius of Soil (m)
+x2 <- within(x2, k2[x2 == "Sa"]<- 0.1) #Water Retention Angle
+x2 <- within(x2, o2[x2 == "Sa"]<- 0.37) #Saturated Water Content (m^3/m^3)
+x2 <- within(x2, p2[x2 == "Sa"]<- 0.058) #Residual Water Content (m^3/m^3)
+x2 <- within(x2, r2[x2 == "Sa"]<- 31) #Angle of Internal Friction
+
+x2 <- within(x2, e2[x2 == "SaCl"]<- 0) #Cohesion of slope material in (kPa)
+x2 <- within(x2, j2[x2 == "SaCl"]<- (0.031/1000)) #Radius of Soil (m)
+x2 <- within(x2, k2[x2 == "SaCl"]<- 0.1) #Water Retention Angle
+x2 <- within(x2, o2[x2 == "SaCl"]<- 0.52) #Saturated Water Content (m^3/m^3)
+x2 <- within(x2, p2[x2 == "SaCl"]<- 0.1) #Residual Water Content (m^3/m^3)
+x2 <- within(x2, r2[x2 == "SaCl"]<- 32) #Angle of Internal Friction
+
+x2 <- within(x2, e2[x2 == "LoSa"]<- 8) #Cohesion of slope material in (kPa)
+x2 <- within(x2, j2[x2 == "LoSa"]<- (0.074/1000)) #Radius of Soil (m)
+x2 <- within(x2, k2[x2 == "LoSa"]<- 0.1) #Water Retention Angle
+x2 <- within(x2, o2[x2 == "LoSa"]<- 0.39) #Saturated Water Content (m^3/m^3)
+x2 <- within(x2, p2[x2 == "LoSa"]<- 0.074) #Residual Water Content (m^3/m^3)
+x2 <- within(x2, r2[x2 == "LoSa"]<- 32) #Angle of Internal Friction
+
+x2 <- within(x2, e2[x2 == "SaLo"]<- 7) #Cohesion of slope material in (kPa)
+x2 <- within(x2, j2[x2 == "SaLo"]<- (0.05/1000)) #Radius of Soil (m)
+x2 <- within(x2, k2[x2 == "SaLo"]<- 0.1) #Water Retention Angle
+x2 <- within(x2, o2[x2 == "SaLo"]<- 0.37) #Saturated Water Content (m^3/m^3)
+x2 <- within(x2, p2[x2 == "SaLo"]<- 0.067) #Residual Water Content (m^3/m^3)
+x2 <- within(x2, r2[x2 == "SaLo"]<- 32) #Angle of Internal Friction
+
+x2 <- within(x2, e2[x2 == "Lo"]<- 20) #Cohesion of slope material in (kPa)
+x2 <- within(x2, j2[x2 == "Lo"]<- (0.031/1000)) #Radius of Soil (m)
+x2 <- within(x2, k2[x2 == "Lo"]<- 0.1) #Water Retention Angle
+x2 <- within(x2, o2[x2 == "Lo"]<- 0.46) #Saturated Water Content (m^3/m^3)
+x2 <- within(x2, p2[x2 == "Lo"]<- 0.083) #Residual Water Content (m^3/m^3)
+x2 <- within(x2, r2[x2 == "Lo"]<- 27) #Angle of Internal Friction
+
+x2 <- within(x2, e2[x2 == "Si"]<- 0) #Cohesion of slope material in (kPa)
+x2 <- within(x2, j2[x2 == "Si"]<- (0.005/1000)) #Radius of Soil (m)
+x2 <- within(x2, k2[x2 == "Si"]<- 2) #Water Retention Angle
+x2 <- within(x2, o2[x2 == "Si"]<- 0.48) #Saturated Water Content (m^3/m^3)
+x2 <- within(x2, p2[x2 == "Si"]<- 0.123) #Residual Water Content (m^3/m^3)
+x2 <- within(x2, r2[x2 == "Si"]<- 33) #Angle of Internal Friction
+
+x2 <- within(x2, e2[x2 == "SiLo"]<- 20) #Cohesion of slope material in (kPa)
+x2 <- within(x2, j2[x2 == "SiLo"]<- (0.0156/1000)) #Radius of Soil (m)
+x2 <- within(x2, k2[x2 == "SiLo"]<- 1.5) #Water Retention Angle
+x2 <- within(x2, o2[x2 == "SiLo"]<- 0.43) #Saturated Water Content (m^3/m^3)
+x2 <- within(x2, p2[x2 == "SiLo"]<- 0.061) #Residual Water Content (m^3/m^3)
+x2 <- within(x2, r2[x2 == "SiLo"]<- 27) #Angle of Internal Friction
+
+x2 <- within(x2, e2[x2 == "SaClLo"]<- 13) #Cohesion of slope material in (kPa)
+x2 <- within(x2, j2[x2 == "SaClLo"]<- (0.031/1000)) #Radius of Soil (m)
+x2 <- within(x2, k2[x2 == "SaClLo"]<- 4) #Water Retention Angle
+x2 <- within(x2, o2[x2 == "SaClLo"]<- 0.40) #Saturated Water Content (m^3/m^3)
+x2 <- within(x2, p2[x2 == "SaClLo"]<- 0.086) #Residual Water Content (m^3/m^3)
+x2 <- within(x2, r2[x2 == "SaClLo"]<- 29) #Angle of Internal Friction    
+
+x2 <- within(x2, e2[x2 == "ClLo"]<- 20) #Cohesion of slope material in (kPa)
+x2 <- within(x2, j2[x2 == "ClLo"]<- (0.002/1000)) #Radius of Soil (m)
+x2 <- within(x2, k2[x2 == "ClLo"]<- 9) #Water Retention Angle
+x2 <- within(x2, o2[x2 == "ClLo"]<- 0.47) #Saturated Water Content (m^3/m^3)
+x2 <- within(x2, p2[x2 == "ClLo"]<- 0.129) #Residual Water Content (m^3/m^3)
+x2 <- within(x2, r2[x2 == "ClLo"]<- 27) #Angle of Internal Friction    
+
+x2 <- within(x2, e2[x2 == "SiClLo"]<- 20) #Cohesion of slope material in (kPa)
+x2 <- within(x2, j2[x2 == "SiClLo"]<- (0.0039/1000)) #Radius of Soil (m)
+x2 <- within(x2, k2[x2 == "SiClLo"]<- 78) #Water Retention Angle
+x2 <- within(x2, o2[x2 == "SiClLo"]<- 0.55) #Saturated Water Content (m^3/m^3)
+x2 <- within(x2, p2[x2 == "SiClLo"]<- 0.098) #Residual Water Content (m^3/m^3)
+x2 <- within(x2, r2[x2 == "SiClLo"]<- 27) #Angle of Internal Friction        
+
+x2 <- within(x2, e2[x2 == "SiCl"]<- 22) #Cohesion of slope material in (kPa)
+x2 <- within(x2, j2[x2 == "SiCl"]<- (0.005/1000)) #Radius of Soil (m)
+x2 <- within(x2, k2[x2 == "SiCl"]<- 60) #Water Retention Angle
+x2 <- within(x2, o2[x2 == "SiCl"]<- 0.47) #Saturated Water Content (m^3/m^3)
+x2 <- within(x2, p2[x2 == "SiCl"]<- 0.163) #Residual Water Content (m^3/m^3)
+x2 <- within(x2, r2[x2 == "SiCl"]<- 27) #Angle of Internal Friction
+
+x2 <- within(x2, e2[x2 == "Cl"]<- 23) #Cohesion of slope material in (kPa)
+x2 <- within(x2, j2[x2 == "Cl"]<- (0.001/1000)) #Radius of Soil (m)
+x2 <- within(x2, k2[x2 == "Cl"]<- 78) #Water Retention Angle
+x2 <- within(x2, o2[x2 == "Cl"]<- 0.51) #Saturated Water Content (m^3/m^3)
+x2 <- within(x2, p2[x2 == "Cl"]<- 0.102) #Residual Water Content (m^3/m^3)
+x2 <- within(x2, r2[x2 == "Cl"]<- 26) #Angle of Internal Friction
+
+
+e2$e2 <- x2$e2
+j2$j2 <- x2$j2
+k2$k2 <- x2$k2
+o2$o2 <- x2$o2
+p2$p2 <- x2$p2
+r2$r2 <- x2$r2
+
+
+k2 <- as.data.frame(k2*(pi/180))
+r2 <- as.data.frame(r2*(pi/180))
+
+c2 <- as.data.frame(as.numeric(as.character(final$angle))*(pi/180)) #Angle
+c2$c2 <- c2[["as.numeric(as.character(final$angle)) * (pi/180)"]]
+c2[["as.numeric(as.character(final$angle)) * (pi/180)"]] <- NULL
+
+g2 <- as.data.frame((f2$f2*d2$d2*9.81*cos(c2$c2))) #Normal Force (kPa)
+g2$g2 <- g2[["(f2$f2 * d2$d2 * 9.81 * cos(c2$c2))"]]
+g2[["(f2$f2 * d2$d2 * 9.81 * cos(c2$c2))"]] <- NULL
+
+a2 <- as.data.frame(-9.81*h2$h2) #Pore-Pressure of Water (kPa)
+a2$a2 <- a2[["-9.81 * h2$h2"]]
+a2[["-9.81 * h2$h2"]] <- NULL
+
+l2 <- as.data.frame((180/pi)*(j2$j2*((1/(cos(k2$k2)))-1))) #r1
+l2$l2 <- l2[["(180/pi) * (j2$j2 * ((1/(cos(k2$k2))) - 1))"]]
+l2[["(180/pi) * (j2$j2 * ((1/(cos(k2$k2))) - 1))"]] <- NULL
+
+m2 <- as.data.frame((180/pi)*(j2$j2*(1+((tan(k2$k2))-(1/(cos(k2$k2))))))) #r2
+m2$m2 <- m2[["(180/pi) * (j2$j2 * (1 + ((tan(k2$k2)) - (1/(cos(k2$k2))))))"]]
+m2[["(180/pi) * (j2$j2 * (1 + ((tan(k2$k2)) - (1/(cos(k2$k2))))))"]] <- NULL
+
+n2 <- as.data.frame(((72*((1/l2$l2)-(1/m2$m2)))/1000000)+a2$a2) #Pore-Pressure of Air (kPa)
+n2$n2 <- n2[["((72 * ((1/l2$l2) - (1/m2$m2)))/1e+06) + a2$a2"]]
+n2[["((72 * ((1/l2$l2) - (1/m2$m2)))/1e+06) + a2$a2"]] <- NULL
+
+s2 <- as.data.frame(e2$e2+((g2$g2-a2$a2)*(tan(r2$r2*q2$q2))+((n2$n2-a2$a2)*((q2$q2-p2$p2)/(o2$o2-p2$p2))*(tan(r2$r2*q2$q2))))) #Shear Strength, Resisting Force (kPa)
+s2$s2 <- s2[["e2$e2 + ((g2$g2 - a2$a2) * (tan(r2$r2 * q2$q2)) + ((n2$n2 - a2$a2) * ((q2$q2 - p2$p2)/(o2$o2 - p2$p2)) * (tan(r2$r2 * q2$q2))))"]]
+s2[["e2$e2 + ((g2$g2 - a2$a2) * (tan(r2$r2 * q2$q2)) + ((n2$n2 - a2$a2) * ((q2$q2 - p2$p2)/(o2$o2 - p2$p2)) * (tan(r2$r2 * q2$q2))))"]] <- NULL
+
+b2 <- as.data.frame((f2$f2*d2$d2*9.81*sin(c2$c2))) #Driving Force (kPa)
+b2$b2 <- b2[["(f2$f2 * d2$d2 * 9.81 * sin(c2$c2))"]]
+b2[["(f2$f2 * d2$d2 * 9.81 * sin(c2$c2))"]] <- NULL
+
+u2 <- as.data.frame(s2$s2/b2$b2) #FOC
+u2$u2 <- u2[["s2$s2/b2$b2"]]
+u2[["s2$s2/b2$b2"]] <- NULL
+
+export = NULL
+export$FOC_AVG <- (u1$u1+u2$u2)/2
+export$angle <- final$angle
+export$lat1 <- final$lat1
+export$long1 <- final$long1
+export$soiltype1 <- final$soil1
+export$FOC1 <- u1$u1
+export$lat2 <- final$lat2
+export$long2 <- final$long2
+export$soiltype2 <- final$soil2
+export$FOC2 <- u2$u2
+export <- as.data.frame(export)
+
+export_compact <- NULL
+export_compact$FOC_AVG <- export$FOC_AVG
+export_compact$lat1 <- export$lat1
+export_compact$long1 <- export$long1
+export_compact$lat2 <- export$lat2
+export_compact$long2 <- export$long2
+
+export_compact <- as.data.frame(export_compact)
+
+closeAllConnections()

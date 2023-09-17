@@ -1,0 +1,7 @@
+Video/
+Forms/
+*.pdf
+*.R*
+!*.R
+*.log
+*logs/

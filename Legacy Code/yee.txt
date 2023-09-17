@@ -1,0 +1,133 @@
+t <- 10
+i <- 5
+prj_dd <- "+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs"
+numCores <- detectCores()
+registerDoParallel(numCores)
+
+lat1 <- 34.50254 #length, y
+long1 <- -119.80725 #width, x
+
+lat2<- 34.42258 #length, y
+long2<- -119.62143 #width, x
+
+set.seed(i)
+data_df <- data.frame(x = runif(t, min = long1, max = long2), y = runif(t, min = lat2, max = lat1), z = runif(t, min = long1, max = long2), a = runif(t, min = lat2, max = lat1))
+
+elevation1 <- foreach (i=1:t, .packages = "textreadr", .combine = 'rbind') %dopar% 
+{
+
+    x <- data_df$x[i]
+    y <- data_df$y[i] 
+        
+    str1 <- "https://nationalmap.gov/epqs/pqs.php?x="
+    str2 <- x
+    str3 <- "&y="
+    str4 <- y
+    str5 <- "&units=Feet&output=xml"
+        
+    url <- paste(str1,str2,str3,str4,str5,sep = "")
+    
+  tryCatch({
+	webpage <- read_html(url)    
+	test1 <- as.data.frame(webpage)
+   	test2 <- as.data.frame(t(test1))
+  	test2$V1 <- NA
+   	test2$V1 <- test2$V2
+	},
+    error = next())
+Sys.sleep(5)
+    h = as.data.frame(test2$V1)
+}
+
+elevation1 <- data.frame(elevation1)
+elevation1$elevation <- NULL
+elevation1$x <- NULL
+elevation1$y <- NULL
+
+elevation1$elevation <- elevation1$test2.V1
+elevation1$x <- data_df$x
+elevation1$y <- data_df$y
+elevation1$elevation <- as.numeric(as.character(elevation1[,1]))
+elevation1$test2.V1 <- NULL
+
+
+data_dfs <- data_df
+data_dfs$x <- NULL
+data_dfs$y <- NULL
+
+elevation2 <- foreach (i=1:t, .packages = "textreadr", .combine = 'rbind') %dopar% 
+{
+    
+    x <- data_dfs$z[i]
+    y <- data_dfs$a[i] 
+        
+    str1 <- "https://nationalmap.gov/epqs/pqs.php?x="
+    str2 <- x
+    str3 <- "&y="
+    str4 <- y
+    str5 <- "&units=Feet&output=xml"
+        
+    url <- paste(str1,str2,str3,str4,str5,sep = "")
+    webpage <- read_html(url)
+        
+    test1 <- as.data.frame(webpage)
+    test2 <- as.data.frame(t(test1))
+    test2$V1 <- test2$V2
+
+    h = as.data.frame(test2$V1)
+}
+
+elevation2 <- data.frame(elevation2)
+elevation2$elevation <- NULL
+elevation1$z <- NULL
+elevation1$a <- NULL
+
+elevation2$elevation <- elevation2$test2.V1
+elevation1$z <- data_df$z
+elevation1$a <- data_df$a
+elevation2$elevation <- as.numeric(as.character(elevation2[,1]))
+elevation2$test2.V1 <- NULL
+
+length1 <- data_df %>% mutate(CTD = geosphere::distHaversine(cbind(x, y), cbind(z, a)))
+
+length1$x <- NULL
+length1$y <- NULL
+length1$z <- NULL
+length1$a <- NULL
+
+elevation1$z <- NULL
+elevation1$a <- NULL
+
+length1 <- length1 %>%
+    mutate(CTD=replace(CTD, CTD<50, NA)) %>%
+    as.data.frame()
+
+heightdif <- abs(elevation1$elevation - elevation2$elevation)
+heightdif <- as.data.frame(heightdif)
+
+angle <- (57.295779513*(atan((heightdif$heightdif/length1$CTD))))
+angle <- as.data.frame(angle)
+
+angle$lat1 <- 0
+angle$long1 <- 0
+angle$lat2 <- 0
+angle$long2 <- 0
+
+angle$lat1 <- elevation1$y
+angle$lat2 <- elevation2$a
+angle$long1 <- elevation1$x
+angle$long2 <- elevation2$z
+
+angle$elevation1 <- 0
+angle$elevation2 <- 0
+
+angle$elevation1 <- elevation1$elevation
+angle$elevation2 <- elevation2$elevation
+
+angle$heightdif <- 0
+
+angle$heightdif <- heightdif$heightdif
+
+angle$distance <- 0
+
+angle$distance <- length1$CTD
