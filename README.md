@@ -5,7 +5,7 @@ The purpose of this repository is to showcase various a novel method of predicit
 **Performace**
 
 | Method | 2D Modeling | Mohr-Coulomb | Novel Method |
-| ------- | ------- | ------- | ------- | ------- | ------- | ------- | ------- | ------- | ------- | ------- | ------- | ------- | ------- |
+| ------- | ------- | ------- | ------- |
 | Montecito, California | 1.07 | 1.41 | 1.21 |
 | Collbran, Colorado | 1.23 | 1.37 | 1.29 |
 | Oso, Washington | 1.47 | 1.82 | 1.62 |
